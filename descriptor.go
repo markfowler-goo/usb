@@ -19,22 +19,24 @@ func toDevice(dd gusb.DeviceDescriptor) *Device {
 	pid := uint16(dd.Product)
 
 	d := &Device{
-		Bus:     dd.PathInfo.Bus,
-		Device:  dd.PathInfo.Dev,
-		sysPath: dd.PathInfo.SysPath,
-		Vendor:  ID{ID: vid, nameFromIdFile: vendorName(vid)},
-		Product: ID{ID: pid, nameFromIdFile: productName(vid, pid)},
-		Configs: make([]Configuration, dd.NumConfigs),
+		Bus:                   dd.PathInfo.Bus,
+		Device:                dd.PathInfo.Dev,
+		SysPath:               dd.PathInfo.SysPath,
+		Vendor:                ID(vid),
+		vendorNameFromIdFile:  vendorName(vid),
+		Product:               ID(pid),
+		productNameFromIdFile: productName(vid, pid),
+		Configs:               make([]Configuration, dd.NumConfigs),
 	}
 	for _, c := range dd.Configs {
 		d.Configs[c.Value-1] = toConfig(c, d)
 	}
 	// walk sysfs path to find matching device, and set d.sysPath
-	if d.sysPath == "" {
-		d.sysPath = getSysfsFromBusDev(d.Bus, d.Device)
+	if d.SysPath == "" {
+		d.SysPath = getSysfsFromBusDev(d.Bus, d.Device)
 	}
 
-	if d.sysPath != "" {
+	if d.SysPath != "" {
 		d.dataSource = backingSysfs{} //@todo: fall back to usbfs for failures?
 	} else {
 		d.dataSource = backingUsbfs{}
@@ -57,11 +59,11 @@ func toDevice(dd gusb.DeviceDescriptor) *Device {
 		}
 	}
 
-	d.Vendor.nameFromDevice, err = d.dataSource.getVendorName(*d)
+	d.vendorNameFromDevice, err = d.dataSource.getVendorName(*d)
 	if err != nil {
 		log.WithError(err).Error("problem fetching manufacturer name")
 	}
-	d.Product.nameFromDevice, err = d.dataSource.getProductName(*d)
+	d.productNameFromDevice, err = d.dataSource.getProductName(*d)
 	if err != nil {
 		log.WithError(err).Error("problem fetching product name")
 	}

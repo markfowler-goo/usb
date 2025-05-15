@@ -21,35 +21,44 @@ var (
 	ErrInvalidInterfaceIndex = errors.New("usb: interface index out of bounds")
 )
 
-type ID struct {
-	ID             uint16 // ID number, e.g. 0xF00D
-	nameFromIdFile string // sourced from usb.ids
-	nameFromDevice string // sourced from device string descriptors
+type ID uint16
+
+func (d Device) VendorName() string {
+	if d.vendorNameFromIdFile != "" {
+		return d.vendorNameFromIdFile
+	} else {
+		return d.vendorNameFromDevice
+	}
 }
 
-func (i ID) Name() string {
-	if i.nameFromIdFile != "" {
-		return i.nameFromIdFile
+func (d Device) ProductName() string {
+	if d.productNameFromIdFile != "" {
+		return d.productNameFromIdFile
 	} else {
-		return i.nameFromDevice
+		return d.productNameFromDevice
 	}
 }
 
 type Device struct {
-	Bus          int
-	Device       int
-	Port         int // @todo: keep this up to date with hotplugs, resets?
-	Ports        []int
-	Vendor       ID
-	Product      ID
-	Parent       *Device
-	Speed        Speed
-	Configs      []Configuration
-	ActiveConfig *Configuration // can read SYSFSPATH/bConfigurationValue
+	Bus                   int
+	Device                int
+	Port                  int // @todo: keep this up to date with hotplugs, resets?
+	Ports                 []int
+	Vendor                ID
+	vendorNameFromIdFile  string
+	vendorNameFromDevice  string
+	Product               ID
+	productNameFromIdFile string
+	productNameFromDevice string
+	Parent                *Device
+	Speed                 Speed
+	Configs               []Configuration
+	ActiveConfig          *Configuration // can read SYSFSPATH/bConfigurationValue
 
 	dataSource dataBacking
+	ctx        *Context // Context that this device was opened with
 	f          *os.File // USBFS file
-	sysPath    string   // SYSFS directory for this device
+	SysPath    string   // SYSFS directory for this device
 }
 
 func List() ([]*Device, error) {
@@ -120,11 +129,25 @@ func (d *Device) Open() error {
 
 func (d *Device) Close() error {
 	if d.f == nil {
-		return errors.New("device not open")
+		// Already closed or was never opened via d.Open()
+		// If it was managed by a context, still try to deregister.
+		if d.ctx != nil {
+			d.ctx.closeDev(d)
+			d.ctx = nil // Avoid future calls if Close is called multiple times
+		}
+		return nil
 	}
 
-	// @todo release any claimed interfaces
-	return d.f.Close()
+	// Deregister from context if associated
+	if d.ctx != nil {
+		d.ctx.closeDev(d)
+		d.ctx = nil
+	}
+
+	// @todo release any claimed interfaces. This is typically handled by the user.
+	err := d.f.Close()
+	d.f = nil // Mark as closed
+	return err
 }
 
 func (d *Device) Interface(i int) (*Interface, error) {
@@ -143,8 +166,20 @@ func (d *Device) Interface(i int) (*Interface, error) {
 	return &d.ActiveConfig.Interfaces[i], nil
 }
 
-func (d *Device) GetDefaultInterface() (*Interface, error) {
-	return d.Interface(0)
+func (d *Device) DefaultInterface() (intf *Interface, done func(), err error) {
+	intf, err = d.Interface(0)
+	if err != nil {
+		return nil, nil, err
+	}
+	d.Open()
+	err = intf.Claim()
+	if err != nil {
+		return nil, nil, err
+	}
+	return intf, func() {
+		d.Close()
+		intf.Release()
+	}, nil
 }
 
 // Return endpoint by its Address number.

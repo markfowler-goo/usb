@@ -1,6 +1,7 @@
 package usb
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
@@ -99,6 +100,99 @@ func (e *InEndpoint) BulkIn(buffer []byte, timeoutMs int) (int, error) {
 		return n, fmt.Errorf("usb: BulkIn from ep %02X failed: %w", e.Address, err)
 	}
 	return n, nil
+}
+
+func (e *OutEndpoint) WriteContext(ctx context.Context, buf []byte) (int, error) {
+	// Check if the context is already cancelled
+	select {
+	case <-ctx.Done():
+		return 0, ctx.Err()
+	default:
+		// Continue if the context is not cancelled
+	}
+
+	// Check if the device is open
+	if e.i == nil || e.i.d == nil || e.i.d.f == nil {
+		return 0, errors.New("usb: device not open for WriteContext")
+	}
+
+	// Check if it's an OUT endpoint (bit 7 of address is 0)
+	if (e.Address & 0x80) != 0 {
+		return 0, fmt.Errorf("usb: endpoint address %02X is not an OUT endpoint", e.Address)
+	}
+
+	// Check if it's a Bulk endpoint
+	if e.TransferType != TransferTypeBulk {
+		return 0, fmt.Errorf("usb: endpoint address %02X is not a bulk endpoint (type %02X)", e.Address, e.TransferType)
+	}
+
+	// Create a channel to receive the result from the goroutine
+	resultChan := make(chan transferResult)
+
+	// Launch a goroutine to perform the blocking BulkOut operation
+	go func() {
+		n, err := e.BulkOut(buf, 0) // Use a timeout of 0 for non-blocking operation
+		resultChan <- transferResult{n, err}
+	}()
+
+	// Wait for either the context to be cancelled or the transfer to complete
+	select {
+	case <-ctx.Done():
+		// Context cancelled, return the context error
+		return 0, ctx.Err()
+	case result := <-resultChan:
+		// Transfer completed, return the result
+		return result.n, result.err
+	}
+}
+
+type transferResult struct {
+	n   int
+	err error
+}
+
+func (e *InEndpoint) ReadContext(ctx context.Context, buf []byte) (int, error) {
+	// Check if the context is already cancelled
+	select {
+	case <-ctx.Done():
+		return 0, ctx.Err()
+	default:
+		// Continue if the context is not cancelled
+	}
+
+	// Check if the device is open
+	if e.i == nil || e.i.d == nil || e.i.d.f == nil {
+		return 0, errors.New("usb: device not open for ReadContext")
+	}
+
+	// Check if it's an IN endpoint (bit 7 of address is 1)
+	if (e.Address & 0x80) == 0 {
+		return 0, fmt.Errorf("usb: endpoint address %02X is not an IN endpoint", e.Address)
+	}
+
+	// Check if it's a Bulk endpoint
+	if e.TransferType != TransferTypeBulk {
+		return 0, fmt.Errorf("usb: endpoint address %02X is not a bulk endpoint (type %02X)", e.Address, e.TransferType)
+	}
+
+	// Create a channel to receive the result from the goroutine
+	resultChan := make(chan transferResult)
+
+	// Launch a goroutine to perform the blocking BulkIn operation
+	go func() {
+		n, err := e.BulkIn(buf, 0) // Use a timeout of 0 for non-blocking operation
+		resultChan <- transferResult{n, err}
+	}()
+
+	// Wait for either the context to be cancelled or the transfer to complete
+	select {
+	case <-ctx.Done():
+		// Context cancelled, return the context error
+		return 0, ctx.Err()
+	case result := <-resultChan:
+		// Transfer completed, return the result
+		return result.n, result.err
+	}
 }
 
 func (e *Endpoint) Bulk() {

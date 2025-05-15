@@ -10,7 +10,7 @@ import (
 )
 
 /*
- * Locate a device using it's VID and PID
+ * Locate a device using its VID and PID
  *
  */
 func main() {

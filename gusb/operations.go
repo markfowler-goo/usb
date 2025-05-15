@@ -16,7 +16,7 @@ func Claim(f *os.File, ifno int32) error {
 		IoctlCode: int32(USBDEVFS_DISCONNECT), // disconn kernel driver
 		Data:      0,
 	}); errno == unix.ENODATA {
-		debugLog("no previous kernel driver attached")
+		// debugLog("no previous kernel driver attached")
 	} else if r == -1 {
 		errorLog("driver disconnect failed:", r, errno)
 	}
