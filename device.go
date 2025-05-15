@@ -15,7 +15,10 @@ import (
 const badIndexNumber = "invalid %s value: %d"
 
 var (
-	ErrDeviceNotFound = errors.New("Device not found")
+	ErrDeviceNotFound        = errors.New("Device not found")
+	ErrNoActiveConfig        = errors.New("usb: device has no active configuration")
+	ErrNoInterfacesInConfig  = errors.New("usb: active configuration has no interfaces")
+	ErrInvalidInterfaceIndex = errors.New("usb: interface index out of bounds")
 )
 
 type ID struct {
@@ -126,17 +129,25 @@ func (d *Device) Close() error {
 
 func (d *Device) Interface(i int) (*Interface, error) {
 	if d.ActiveConfig == nil {
-		//@todo what do we do here?
-		log.WithField("interface", i).Error("no active config")
-		return nil, errors.New("no active config")
+		log.WithField("interface", i).Error(ErrNoActiveConfig.Error())
+		return nil, ErrNoActiveConfig
 	}
-	if i < 0 || i > len(d.ActiveConfig.Interfaces)-1 {
-		return nil, fmt.Errorf(badIndexNumber, "interface", i)
+	if len(d.ActiveConfig.Interfaces) == 0 {
+		// This configuration has no interfaces at all.
+		return nil, ErrNoInterfacesInConfig
+	}
+	if i < 0 || i >= len(d.ActiveConfig.Interfaces) {
+		// len > 0, but i is still out of bounds.
+		return nil, fmt.Errorf("%w: index %d, available 0 to %d", ErrInvalidInterfaceIndex, i, len(d.ActiveConfig.Interfaces)-1)
 	}
 	return &d.ActiveConfig.Interfaces[i], nil
 }
 
-// Return endpoint by it's Address number.
+func (d *Device) GetDefaultInterface() (*Interface, error) {
+	return d.Interface(0)
+}
+
+// Return endpoint by its Address number.
 func (d *Device) Endpoint(num int) (*Endpoint, error) {
 	if num < 0 {
 		return nil, fmt.Errorf(badIndexNumber, "endpoint", num)
