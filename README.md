@@ -55,6 +55,8 @@ Release History
 ----------------
 - 0.0.1
     + Work in Progress
+- 0.0.2
+    + Added functionality for BulkIn and BulkOut transfers.
 
 License
 --------
