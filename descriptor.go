@@ -3,11 +3,11 @@ package usb
 import (
 	"errors"
 	"io/ioutil"
+	"log"
 	"os"
 	"path/filepath"
 	"strconv"
 
-	"github.com/apex/log"
 	"github.com/pzl/usb/gusb"
 )
 
@@ -44,7 +44,7 @@ func toDevice(dd gusb.DeviceDescriptor) *Device {
 
 	if d.Device <= 0 {
 		if dev, err := d.dataSource.getDevNum(*d); err != nil {
-			log.WithError(err).Error("could not get device number")
+			log.Printf("ERROR: could not get device number: %v\n", err)
 		} else {
 			d.Device = dev
 		}
@@ -54,32 +54,32 @@ func toDevice(dd gusb.DeviceDescriptor) *Device {
 		if sysfs, ok := d.dataSource.(backingSysfs); ok {
 			d.Bus, err = sysfs.getBusNum(*d)
 			if err != nil {
-				log.WithError(err).Error("problem getting bus number")
+				log.Printf("ERROR: problem getting bus number: %v\n", err)
 			}
 		}
 	}
 
 	d.vendorNameFromDevice, err = d.dataSource.getVendorName(*d)
 	if err != nil {
-		log.WithError(err).Error("problem fetching manufacturer name")
+		log.Printf("ERROR: problem fetching manufacturer name: %v\n", err)
 	}
 	d.productNameFromDevice, err = d.dataSource.getProductName(*d)
 	if err != nil {
-		log.WithError(err).Error("problem fetching product name")
+		log.Printf("ERROR: problem fetching product name: %v\n", err)
 	}
 	d.Port, err = d.dataSource.getPort(*d)
 	if err != nil {
-		log.WithError(err).Error("problem fetching device port number")
+		log.Printf("ERROR: problem fetching device port number: %v\n", err)
 	}
 	cfg, err := d.dataSource.getActiveConfig(*d)
 	if err != nil {
-		log.WithError(err).Error("problem fetching active config")
+		log.Printf("ERROR: problem fetching active config: %v\n", err)
 		cfg = 1 // assume it's the first one ?
 	}
 	d.ActiveConfig = &d.Configs[cfg-1]
 	d.Speed, err = d.dataSource.getSpeed(*d)
 	if err != nil {
-		log.WithError(err).Error("problem fetching device speed")
+		log.Printf("ERROR: problem fetching device speed: %v\n", err)
 		d.Speed = SpeedUnknown
 	}
 
@@ -87,10 +87,10 @@ func toDevice(dd gusb.DeviceDescriptor) *Device {
 	if sysfs, ok := d.dataSource.(backingSysfs); ok {
 		d.Parent, err = sysfs.getParent(*d)
 		if err != nil {
-			log.WithError(err).Error("problem determining device parent")
+			log.Printf("ERROR: problem determining device parent: %v\n", err)
 		}
 	} else {
-		log.Info("sysfs not available, not able to determine device hub parents")
+		log.Println("INFO: sysfs not available, not able to determine device hub parents")
 	}
 	d.Ports = getPorts(*d)
 

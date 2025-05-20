@@ -3,10 +3,10 @@ package usb
 import (
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 
-	"github.com/apex/log"
 	"github.com/pzl/usb/gusb"
 )
 
@@ -76,18 +76,16 @@ func List() ([]*Device, error) {
 }
 
 func Open(bus int, dev int) (*Device, error) {
-	l := log.WithFields(log.Fields{"bus": bus, "dev": dev})
 	f, err := os.OpenFile(fmt.Sprintf("/dev/bus/usb/%03d/%03d", bus, dev), os.O_RDWR, 0644)
 	if os.IsNotExist(err) {
 		return nil, ErrDeviceNotFound
 	} else if err != nil {
-		l.WithError(err).Error("failed opening file")
+		log.Printf("ERROR: bus %d, dev %d: failed opening file: %v\n", bus, dev, err)
 		return nil, err
 	}
-
 	desc, err := gusb.ParseDescriptor(f)
 	if err != nil {
-		l.WithError(err).Error("failed parsing descriptor")
+		log.Printf("ERROR: bus %d, dev %d: failed parsing descriptor: %v\n", bus, dev, err)
 		return nil, err
 	}
 	desc.PathInfo.Bus = bus
@@ -152,7 +150,7 @@ func (d *Device) Close() error {
 
 func (d *Device) Interface(i int) (*Interface, error) {
 	if d.ActiveConfig == nil {
-		log.WithField("interface", i).Error(ErrNoActiveConfig.Error())
+		log.Printf("ERROR: interface %d: %v\n", i, ErrNoActiveConfig)
 		return nil, ErrNoActiveConfig
 	}
 	if len(d.ActiveConfig.Interfaces) == 0 {

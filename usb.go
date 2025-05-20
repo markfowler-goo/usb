@@ -7,18 +7,9 @@ import (
 	"fmt"
 	"sync"
 	"time"
-
-	"github.com/apex/log"
-	"github.com/apex/log/handlers/cli"
-	"github.com/apex/log/handlers/text"
-	"github.com/pzl/usb/gusb"
 )
 
 func init() {
-	log.SetHandler(cli.Default) // nice, but also not nice
-	log.SetHandler(text.Default)
-	log.SetLevel(log.InfoLevel)
-	gusb.SetLogger(log.Log.(*log.Logger))
 }
 
 // Context manages all resources related to USB device handling.

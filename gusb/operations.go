@@ -1,14 +1,11 @@
 package gusb
 
 import (
-	"fmt"
+	"log"
 	"os"
 
 	"golang.org/x/sys/unix"
 )
-
-var debugLog = fmt.Printf
-var errorLog = fmt.Printf
 
 func Claim(f *os.File, ifno int32) error {
 	if r, errno := Ioctl(f, USBDEVFS_IOCTL, &IoctlPacket{
@@ -16,9 +13,9 @@ func Claim(f *os.File, ifno int32) error {
 		IoctlCode: int32(USBDEVFS_DISCONNECT), // disconn kernel driver
 		Data:      0,
 	}); errno == unix.ENODATA {
-		// debugLog("no previous kernel driver attached")
+		// Debug: no previous kernel driver attached
 	} else if r == -1 {
-		errorLog("driver disconnect failed:", r, errno)
+		log.Printf("ERROR: driver disconnect failed: %d, %v\n", r, errno)
 	}
 
 	if r, errno := Ioctl(f, USBDEVFS_CLAIMINTERFACE, &ifno); r == -1 {
@@ -26,7 +23,6 @@ func Claim(f *os.File, ifno int32) error {
 	}
 	return nil
 }
-
 func Release(f *os.File, ifno int32) error {
 	if r, errno := Ioctl(f, USBDEVFS_RELEASEINTERFACE, &ifno); r == -1 {
 		return errno
@@ -37,7 +33,7 @@ func Release(f *os.File, ifno int32) error {
 		IoctlCode: int32(USBDEVFS_CONNECT), //reconnect kernel driver
 		Data:      0,
 	}); r == -1 {
-		errorLog("driver connect failed:", r, errno)
+		log.Printf("ERROR: driver connect failed: %d, %v\n", r, errno)
 	}
 	return nil
 }
@@ -51,7 +47,7 @@ func GetDriver(f *os.File, ifno int32) (string, error) {
 	if err == unix.ENODATA { // empty if nothing is in use
 		// empty string?
 	} else if err != nil {
-		errorLog("Could not get driver", err.Error())
+		log.Printf("ERROR: Could not get driver: %v\n", err)
 		return "", err
 	}
 	return string(drv.Driver[:]), nil
@@ -60,7 +56,7 @@ func GetDriver(f *os.File, ifno int32) (string, error) {
 func GetSpeed(f *os.File) (DeviceSpeed, error) {
 	r, err := Ioctl(f, USBDEVFS_GET_SPEED, nil)
 	if err != nil {
-		errorLog("Unable to get device speed", err)
+		log.Printf("ERROR: Unable to get device speed: %v\n", err)
 		return SpeedUnknown, err
 	}
 	return DeviceSpeed(r), nil
