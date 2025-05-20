@@ -3,11 +3,11 @@ package usb
 import (
 	"errors"
 	"io/ioutil"
+	"log"
 	"os"
 	"path/filepath"
 	"strconv"
 
-	"github.com/apex/log"
 	"github.com/pzl/usb/gusb"
 )
 
@@ -19,22 +19,24 @@ func toDevice(dd gusb.DeviceDescriptor) *Device {
 	pid := uint16(dd.Product)
 
 	d := &Device{
-		Bus:     dd.PathInfo.Bus,
-		Device:  dd.PathInfo.Dev,
-		sysPath: dd.PathInfo.SysPath,
-		Vendor:  ID{ID: vid, nameFromIdFile: vendorName(vid)},
-		Product: ID{ID: pid, nameFromIdFile: productName(vid, pid)},
-		Configs: make([]Configuration, dd.NumConfigs),
+		Bus:                   dd.PathInfo.Bus,
+		Device:                dd.PathInfo.Dev,
+		SysPath:               dd.PathInfo.SysPath,
+		Vendor:                ID(vid),
+		vendorNameFromIdFile:  vendorName(vid),
+		Product:               ID(pid),
+		productNameFromIdFile: productName(vid, pid),
+		Configs:               make([]Configuration, dd.NumConfigs),
 	}
 	for _, c := range dd.Configs {
 		d.Configs[c.Value-1] = toConfig(c, d)
 	}
 	// walk sysfs path to find matching device, and set d.sysPath
-	if d.sysPath == "" {
-		d.sysPath = getSysfsFromBusDev(d.Bus, d.Device)
+	if d.SysPath == "" {
+		d.SysPath = getSysfsFromBusDev(d.Bus, d.Device)
 	}
 
-	if d.sysPath != "" {
+	if d.SysPath != "" {
 		d.dataSource = backingSysfs{} //@todo: fall back to usbfs for failures?
 	} else {
 		d.dataSource = backingUsbfs{}
@@ -42,7 +44,7 @@ func toDevice(dd gusb.DeviceDescriptor) *Device {
 
 	if d.Device <= 0 {
 		if dev, err := d.dataSource.getDevNum(*d); err != nil {
-			log.WithError(err).Error("could not get device number")
+			log.Printf("ERROR: could not get device number: %v\n", err)
 		} else {
 			d.Device = dev
 		}
@@ -52,32 +54,32 @@ func toDevice(dd gusb.DeviceDescriptor) *Device {
 		if sysfs, ok := d.dataSource.(backingSysfs); ok {
 			d.Bus, err = sysfs.getBusNum(*d)
 			if err != nil {
-				log.WithError(err).Error("problem getting bus number")
+				log.Printf("ERROR: problem getting bus number: %v\n", err)
 			}
 		}
 	}
 
-	d.Vendor.nameFromDevice, err = d.dataSource.getVendorName(*d)
+	d.vendorNameFromDevice, err = d.dataSource.getVendorName(*d)
 	if err != nil {
-		log.WithError(err).Error("problem fetching manufacturer name")
+		log.Printf("ERROR: problem fetching manufacturer name: %v\n", err)
 	}
-	d.Product.nameFromDevice, err = d.dataSource.getProductName(*d)
+	d.productNameFromDevice, err = d.dataSource.getProductName(*d)
 	if err != nil {
-		log.WithError(err).Error("problem fetching product name")
+		log.Printf("ERROR: problem fetching product name: %v\n", err)
 	}
 	d.Port, err = d.dataSource.getPort(*d)
 	if err != nil {
-		log.WithError(err).Error("problem fetching device port number")
+		log.Printf("ERROR: problem fetching device port number: %v\n", err)
 	}
 	cfg, err := d.dataSource.getActiveConfig(*d)
 	if err != nil {
-		log.WithError(err).Error("problem fetching active config")
+		log.Printf("ERROR: problem fetching active config: %v\n", err)
 		cfg = 1 // assume it's the first one ?
 	}
 	d.ActiveConfig = &d.Configs[cfg-1]
 	d.Speed, err = d.dataSource.getSpeed(*d)
 	if err != nil {
-		log.WithError(err).Error("problem fetching device speed")
+		log.Printf("ERROR: problem fetching device speed: %v\n", err)
 		d.Speed = SpeedUnknown
 	}
 
@@ -85,10 +87,10 @@ func toDevice(dd gusb.DeviceDescriptor) *Device {
 	if sysfs, ok := d.dataSource.(backingSysfs); ok {
 		d.Parent, err = sysfs.getParent(*d)
 		if err != nil {
-			log.WithError(err).Error("problem determining device parent")
+			log.Printf("ERROR: problem determining device parent: %v\n", err)
 		}
 	} else {
-		log.Info("sysfs not available, not able to determine device hub parents")
+		log.Println("INFO: sysfs not available, not able to determine device hub parents")
 	}
 	d.Ports = getPorts(*d)
 

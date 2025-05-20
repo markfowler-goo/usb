@@ -3,12 +3,12 @@ package usb
 import (
 	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 
-	"github.com/apex/log"
 	"github.com/pzl/usb/gusb"
 )
 
@@ -16,46 +16,46 @@ import (
 type backingSysfs struct{}
 
 func (b backingSysfs) getDevNum(d Device) (int, error) {
-	return readAsInt(filepath.Join(d.sysPath, "devnum"))
+	return readAsInt(filepath.Join(d.SysPath, "devnum"))
 }
 func (b backingSysfs) getVendorName(d Device) (string, error) {
-	data, err := ioutil.ReadFile(filepath.Join(d.sysPath, "manufacturer"))
+	data, err := ioutil.ReadFile(filepath.Join(d.SysPath, "manufacturer"))
 	return strings.TrimSpace(string(data)), err
 }
 func (b backingSysfs) getProductName(d Device) (string, error) {
-	data, err := ioutil.ReadFile(filepath.Join(d.sysPath, "product"))
+	data, err := ioutil.ReadFile(filepath.Join(d.SysPath, "product"))
 	return strings.TrimSpace(string(data)), err
 }
 func (b backingSysfs) getPort(d Device) (int, error) {
-	if has := strings.LastIndexAny(d.sysPath, ".-"); has != -1 {
+	if has := strings.LastIndexAny(d.SysPath, ".-"); has != -1 {
 		// look for last port, separated by .  or top-level hub port after the -
-		if port, err := strconv.Atoi(d.sysPath[has+1:]); err == nil {
+		if port, err := strconv.Atoi(d.SysPath[has+1:]); err == nil {
 			return port, nil
 		} else {
 			return 0, err
 		}
 	}
 
-	if strings.HasPrefix(filepath.Base(d.sysPath), "usb") {
+	if strings.HasPrefix(filepath.Base(d.SysPath), "usb") {
 		return 0, nil // is a hub. is not on a port, usually
 	}
-	return 0, fmt.Errorf("unable to find port number in path: %s", d.sysPath)
+	return 0, fmt.Errorf("unable to find port number in path: %s", d.SysPath)
 }
 func (b backingSysfs) getActiveConfig(d Device) (int, error) {
-	cfg, err := readAsInt(filepath.Join(d.sysPath, "bConfigurationValue"))
+	cfg, err := readAsInt(filepath.Join(d.SysPath, "bConfigurationValue"))
 	return cfg, err
 }
 func (b backingSysfs) getSpeed(d Device) (Speed, error) {
-	speed, err := readAsFloat(filepath.Join(d.sysPath, "speed"))
+	speed, err := readAsFloat(filepath.Join(d.SysPath, "speed"))
 	return toSpeedSysfs(speed), err
 }
 
 func (b backingSysfs) getDriver(d Device, intf int) (string, error) {
-	driver := filepath.Join(fmt.Sprintf("%s:%d.%d", d.sysPath, d.ActiveConfig.Value, intf), "driver")
+	driver := filepath.Join(fmt.Sprintf("%s:%d.%d", d.SysPath, d.ActiveConfig.Value, intf), "driver")
 	if drv, err := os.Readlink(driver); err == nil {
 		return filepath.Base(drv), nil
 	} else {
-		log.WithField("path", driver).WithError(err).Error("could not use sysfs to get driver")
+		log.Printf("ERROR: could not use sysfs to get driver for path %s: %v\n", driver, err)
 		return "", err
 	}
 }
@@ -69,10 +69,10 @@ func (b backingSysfs) setConfiguration(d Device, cfg int) error {
 // write interface basename to SYSFS_PATH/drivers/usbfs/bind
 func (b backingSysfs) claim(i Interface) error {
 	// look for bound driver file
-	devPath := fmt.Sprintf("%s:%d.%d", i.d.sysPath, i.d.ActiveConfig.Value, i.ID)
+	devPath := fmt.Sprintf("%s:%d.%d", i.d.SysPath, i.d.ActiveConfig.Value, i.ID)
 	_, err := os.Stat(filepath.Join(devPath, "driver"))
 	if err != nil && !os.IsNotExist(err) {
-		log.WithField("device", devPath).WithError(err).Error("could not get driver information for device")
+		log.Printf("ERROR: could not get driver information for device %s: %v\n", devPath, err)
 		return err
 	}
 
@@ -80,13 +80,13 @@ func (b backingSysfs) claim(i Interface) error {
 	// @todo: HID does not like to be unbound this way.
 	// see: https://unix.stackexchange.com/questions/12005/how-to-use-linux-kernel-driver-bind-unbind-interface-for-usb-hid-devices
 	if !os.IsNotExist(err) {
-		log.WithField("device", devPath).Debug("device has bound driver")
+		// log.Printf("DEBUG: device %s has bound driver\n", devPath)
 		unbind := filepath.Join(devPath, "driver", "unbind")
 		if err := ioutil.WriteFile(unbind, []byte(filepath.Base(devPath)), 0200); err != nil {
 			return fmt.Errorf("error unbinding driver: %v", err)
 		}
 	} else {
-		log.WithField("device", devPath).Debug("no current driver found, nothing to unbind")
+		// log.Printf("DEBUG: no current driver found for device %s, nothing to unbind\n", devPath)
 	}
 	// and bind to usbfs
 	return ioutil.WriteFile("/sys/bus/usb/drivers/usbfs/bind", []byte(filepath.Base(devPath)), 0200)
@@ -103,12 +103,12 @@ func (b backingSysfs) release(i Interface) error {
 /* Not universal funcs */
 
 func (b backingSysfs) getBusNum(d Device) (int, error) {
-	return readAsInt(filepath.Join(d.sysPath, "busnum"))
+	return readAsInt(filepath.Join(d.SysPath, "busnum"))
 }
 
 func (b backingSysfs) getParent(d Device) (*Device, error) {
-	if has := strings.LastIndexAny(d.sysPath, ".-"); has != -1 {
-		parent := d.sysPath[:has]
+	if has := strings.LastIndexAny(d.SysPath, ".-"); has != -1 {
+		parent := d.SysPath[:has]
 		if !strings.ContainsRune(parent, '-') {
 			parent = filepath.Join(filepath.Dir(parent), fmt.Sprintf("usb%s", filepath.Base(parent)))
 		}

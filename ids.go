@@ -6,11 +6,10 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"io"
+	"log"
 	"io/ioutil"
 	"os"
 	"strings"
-
-	"github.com/apex/log"
 )
 
 var vmap vMap
@@ -68,7 +67,7 @@ SCANNER:
 		default:
 			//vendor ID
 			if _, err := hex.Decode(idbuf, l[:4]); err != nil {
-				log.WithField("line", string(l)).Info("failed parsing line in usb.ids")
+				log.Printf("INFO: failed parsing line in usb.ids: %s\n", string(l))
 				continue
 			}
 			vid := binary.BigEndian.Uint16(idbuf)
@@ -111,11 +110,11 @@ func usbIDs() (r io.ReadCloser) {
 	idPaths := []string{"/usr/share/hwdata/usb.ids", "/usr/share/usb.ids", "/usr/share/libosinfo/usb.ids", "/usr/share/kcmusb/usb.ids", "/var/lib/usbutils/usb.ids"}
 
 	for i := range idPaths {
-		log.WithField("path", idPaths[i]).Debug("checking for usb.ids at")
+		// log.Printf("DEBUG: checking for usb.ids at %s\n", idPaths[i])
 		if f, err := os.OpenFile(idPaths[i], os.O_RDONLY, 0644); err != nil {
 			continue
 		} else {
-			log.Debug("success")
+			// log.Printf("DEBUG: success opening %s\n", idPaths[i])
 			r = f
 			break
 		}
@@ -123,7 +122,7 @@ func usbIDs() (r io.ReadCloser) {
 	if r == nil {
 		// must not have found any usable files in the above paths
 		// use the version we shipped with
-		log.Debug("using built-in usb.ids")
+		// log.Println("DEBUG: using built-in usb.ids")
 		r = ioutil.NopCloser(shippedUsbIds()) // turns the reader into a ReadCloser where Close is a no-op
 	}
 

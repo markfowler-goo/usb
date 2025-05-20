@@ -10,8 +10,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-
-	"github.com/apex/log"
 )
 
 type DevicePath struct {
@@ -201,11 +199,7 @@ func ParseDescriptor(r io.Reader) (DeviceDescriptor, error) {
 					epNumForInterf[curIntf]++
 					dev.Configs[curConf].Interfaces[curIntf].Endpoints[curEp] = ep
 				default:
-					log.WithFields(log.Fields{
-						"descriptor": h.Descriptor.String(),
-						"length":     h.Length,
-						"body":       body[2:],
-					}).Debug("got unknown descriptor")
+					// log.Printf("Got unknown descriptor: %v, length: %v, body: %v\n", h.Descriptor, h.Length, body[2:])
 					continue
 				}
 			}
